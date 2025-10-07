@@ -296,7 +296,7 @@ RSpec.describe Lich::DragonRealms::GameInstance do
 
   describe '#get_documentation_url' do
     it 'returns the correct documentation URL for DragonRealms' do
-      expect(game_instance.get_documentation_url).to eq("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
+      expect(game_instance.get_documentation_url).to eq("https://github.com/elanthia-online/ng-betalich/wiki/Documentation-for-Installing-and-Upgrading-Lich")
     end
   end
 
