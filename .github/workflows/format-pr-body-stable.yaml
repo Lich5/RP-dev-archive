@@ -1,0 +1,37 @@
+name: Format Release PR Body (Stable)
+
+on:
+  pull_request:
+    types: [opened, labeled, synchronize, edited, reopened]
+    branches:
+      - "main"
+  # Manual escape hatch
+  # workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: format-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    if: |
+      (github.event.pull_request.user.login == 'release-please[bot]' ||
+       github.event.pull_request.user.login == 'github-actions[bot]') &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'autorelease: pending') &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read optional sections.md if present)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+
+      - name: Format body (stable, idempotent)
+        uses: ./.github/actions/format-body
+        with:
+          mode: stable
+          wait_seconds: 0
+          wait_interval_seconds: 5
+
