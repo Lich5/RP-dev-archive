@@ -235,13 +235,13 @@ jobs:
           gh release upload "${{ steps.rp.outputs.tag_name }}" lich-5.tar.gz lich-5.zip
 
   # 4) Build Windows installer (Ruby4Lich5.exe)
-installer_gate:
-  needs: release
-  if: ${{ needs.release.outputs.release_created == 'true' }}
-  runs-on: ubuntu-latest
-  outputs:
+  installer_gate:
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
     installer: ${{ steps.gate.outputs.installer }}
-  steps:
+    steps:
     - name: Resolve installer gate (labels only, with tracing)
       id: gate
       shell: bash
@@ -270,7 +270,7 @@ installer_gate:
         echo "installer=$want" >> "$GITHUB_OUTPUT"
   build_installer:
     needs: [release, installer_gate]
-    if: ${{ needs.release.outputs.release_created == 'true' }}
+    if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -530,10 +530,10 @@ installer_gate:
           $savedMB = [math]::Max(0, $beforeMB - $afterMB)
           Write-Host "MSYS2-prune: after  = $afterMB MB (saved $savedMB MB)"
           Write-Host "::endgroup::"
-
+      
       # Pull the packaged Lich payload from the just-created Release
       - name: Download core Lich payload from the Release
-        if: ${{ needs.release.outputs.release_created == 'true' }}
+        if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
