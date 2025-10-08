@@ -1,3 +1,22 @@
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   Create stable tags/releases on pushes to main, then build and upload
+#   artifacts (core zips, optional Windows installer) with a corrected,
+#   production-formatted release body/title as early as possible.
+#
+# INVARIANTS
+# - Release body/title must be finalized before packaging begins.
+# - No reliance on a local git checkout for GH release edits/uploads.
+# - PR labels 'skip-installer' or 'no-installer' gate the installer build (case-insensitive).
+#
+# OUTPUTS (selected)
+# - release: steps.rp.outputs.release_created, steps.rp.outputs.tag_name
+# - installer_gate: steps.gate.outputs.installer (true|false)
+#
+# EXTENSION POINTS
+# - EXP_* env toggles at top of file
+# - "Transform body" step: header/footer/normalization rules only (no network)
+# -----------------------------------------------------------------------------
 name: release-please (stable on push)
 
 on:
@@ -39,6 +58,133 @@ jobs:
     steps:
       # 1) Release Please for stable branch
       - uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
+      - name: Trace RP outputs
+        if: ${{ steps.rp.outputs.release_created != '' }}
+        run: |
+          echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
+          echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+
+      # --- FAST-PATH: finalize title/body before packaging ---
+      - name: Derive release vars from tag (no REST)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: derive_rel
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        with:
+          script: |
+            const tag = (process.env.TAG || '').trim();
+            if (!tag) core.setFailed('Missing tag from release-please step');
+            const m = tag.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.\-]+)?)/);
+            const version = m ? m[1] : '';
+            core.setOutput('version', version);
+            core.setOutput('published_at', new Date().toISOString());
+
+      - name: Find merged Release Please PR for this tag
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: find_pr
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          BASE: main
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rawVersion = process.env.VERSION || '';
+            const base = process.env.BASE || 'main';
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const v = esc(rawVersion);
+            const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
+            async function listClosed(opts) {
+              const r = await github.rest.pulls.list({ owner, repo, per_page: 100, sort: 'updated', direction: 'desc', ...opts });
+              return r.data || [];
+            }
+            let pulls = await listClosed({ base });
+            let hit = (pulls || []).find(pr => pr.merged_at && titleRe.test(pr.title || ''));
+            if (!hit) {
+              const q = `repo:${owner}/${repo} is:pr is:merged in:title "v${rawVersion}" base:${base}`;
+              try {
+                const search = await github.rest.search.issuesAndPullRequests({ q, per_page: 5, sort: 'updated', order: 'desc' });
+                const item = (search.data.items || [])[0];
+                if (item) {
+                  const pr = await github.rest.pulls.get({ owner, repo, pull_number: item.number });
+                  hit = pr.data;
+                }
+              } catch {}
+            }
+            core.setOutput('found', hit ? 'true' : 'false');
+            if (hit) core.setOutput('number', String(hit.number));
+
+      - name: Read PR body (seed)
+        if: ${{ steps.rp.outputs.release_created == 'true' && steps.find_pr.outputs.found == 'true' }}
+        id: read_pr
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          NUMBER: ${{ steps.find_pr.outputs.number }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const number = parseInt(process.env.NUMBER || '0', 10);
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: number }).then(r => r.data);
+            core.setOutput('body', pr.body || '');
+
+      - name: Choose seed body (PR preferred)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: choose_seed
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          PR_BODY: ${{ steps.read_pr.outputs.body }}
+        with:
+          script: |
+            const prb = process.env.PR_BODY || '';
+            core.setOutput('body', prb);
+
+      - name: Transform body (header + cleanup + footer)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        id: transform_body
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          SEED: ${{ steps.choose_seed.outputs.body }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          PUBLISHED_AT: ${{ steps.derive_rel.outputs.published_at }}
+        with:
+          script: |
+            const seed = process.env.SEED || '';
+            const version = process.env.VERSION || '';
+            const dt = process.env.PUBLISHED_AT ? new Date(process.env.PUBLISHED_AT) : new Date();
+            const yyyy = dt.getUTCFullYear();
+            const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+            const dd = String(dt.getUTCDate()).padStart(2,'0');
+            const headerLine = `Lich v${version} (${yyyy}-${mm}-${dd})`;
+            const lines = seed.split(/\r?\n/);
+            let i = 0; while (i < lines.length && /^\s*$/.test(lines[i])) i++;
+            if (i >= lines.length) lines.push(headerLine); else lines[i] = headerLine;
+            let body = lines.join('\n');
+            // Strip RP/Ellipsis boilerplate, convert [#123](...) -> #123, append install footer
+            body = body.replace(/\[#(\d+)\]\([^)]*\)/g, '#$1').trim();
+            const footer = [
+              '',
+              'For additional usage/install instructions, please visit one of the following:',
+              '',
+              'DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich',
+              'Gemstone IV - https://gswiki.play.net/Lich:Software/Installation'
+            ].join('\n');
+            body = body.replace(/\n+$/, '') + '\n' + footer + '\n';
+            core.setOutput('final', body);
+
+      - name: Apply title/body to release (gh)
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+          VERSION: ${{ steps.derive_rel.outputs.version }}
+          FINAL: ${{ steps.transform_body.outputs.final }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+      # --- END FAST-PATH ---
         id: rp
         with:
           config-file: release-please-config.json
@@ -89,8 +235,41 @@ jobs:
           gh release upload "${{ steps.rp.outputs.tag_name }}" lich-5.tar.gz lich-5.zip
 
   # 4) Build Windows installer (Ruby4Lich5.exe)
+installer_gate:
+  needs: release
+  if: ${{ needs.release.outputs.release_created == 'true' }}
+  runs-on: ubuntu-latest
+  outputs:
+    installer: ${{ steps.gate.outputs.installer }}
+  steps:
+    - name: Resolve installer gate (labels only, with tracing)
+      id: gate
+      shell: bash
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        set -x
+        repo="${GITHUB_REPOSITORY}"
+        branch="main"
+        tag="${{ needs.release.outputs.tag_name }}"
+        want=true
+        gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
+        ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
+        pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
+        best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
+          def esc: gsub("([.^$|()\[\]{}*+?\\-])"; "\\$1");
+          .[] | select(.merged_at != null)
+          | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
+          | [.merged_at, .number] | @tsv' | sort -r | head -n1)"
+        pr="$(printf '%s' "$best" | awk '{print $2}')"
+        if [ -n "${pr:-}" ]; then
+          labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
+          if printf '%s\n' "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then want=false; fi
+        fi
+        echo "installer=$want" >> "$GITHUB_OUTPUT"
   build_installer:
-    needs: release
+    needs: [release, installer_gate]
     if: ${{ needs.release.outputs.release_created == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 120
@@ -121,6 +300,7 @@ jobs:
 
       # Build sanitized PATH that prefers vendored MSYS2 (Option A) and cache it
       - name: Build sanitized PATH for vendored MSYS2
+        id: vendormsys
         shell: powershell
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -134,12 +314,13 @@ jobs:
           }
           $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
           "PATH_VENDOR_MSYS={0}" -f ($san -join ';') | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+                "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
           "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys   = 'C:\Ruby4Lich5\msys64'
@@ -162,7 +343,7 @@ jobs:
       - name: Dependency validation (toolchain & pkg-config)
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -204,22 +385,20 @@ jobs:
       - name: Install required gems
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
           CC: gcc
           PKG_CONFIG: pkg-config
         run: |
           gem install sqlite3 --platform ruby -- --enable-system-libraries --with-sqlite3-include=${env:MSYS2_ROOT}/ucrt64/include --with-sqlite3-lib=${env:MSYS2_ROOT}/ucrt64/lib
           gem install ascii_charts gtk3 json logger os ostruct redis sequel terminal-table tzinfo tzinfo-data webrick --no-document
-          gem uninstall rexml --force
-          gem install rexml --version 3.3.1
 
       # Optional experiment: validate Ruby actually initializes GTK (not just require)
       - name: Validate Ruby GTK/sqlite3 runtime
         if: ${{ env.EXP_VALIDATE_RUBY_GTK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -320,7 +499,7 @@ jobs:
         if: ${{ env.EXP_PRUNE_BULK == 'true' }}
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $msys = 'C:\Ruby4Lich5\msys64'
@@ -368,7 +547,7 @@ jobs:
       - name: Build Windows installer with Inno Setup
         shell: powershell
         env:
-          PATH: ${{ env.PATH_VENDOR_MSYS }}
+          PATH: ${{ steps.vendormsys.outputs.path }}
           RI_DEVKIT: ''
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
