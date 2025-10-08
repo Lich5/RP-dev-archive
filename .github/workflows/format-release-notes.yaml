@@ -115,7 +115,7 @@ jobs:
 
       # Robust PR lookup for the Release Please PR that produced this tag.
       - name: Find merged Release Please PR for this tag
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: findpr
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
@@ -173,7 +173,7 @@ jobs:
 
       # Read PR body only when found.
       - name: Read PR body (seed text)
-        if: steps.guard.outputs.skip != 'true' && steps.findpr.outputs.found == 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true' && steps.findpr.outputs.found == 'true'
         id: readpr
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
@@ -188,7 +188,7 @@ jobs:
 
       # Choose the source body (PR body when present; else release body). No heredoc.
       - name: Choose seed body
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: choose
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
@@ -201,7 +201,7 @@ jobs:
             core.setOutput('body', prb || rel);
 
       - name: Transform body (normalize header, drop RP/Ellipsis, plain PR refs, append footer + sentinel)
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         id: transform
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
@@ -257,7 +257,7 @@ jobs:
             core.setOutput('final', body);
 
       - name: Update release title (Lich v{version})
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
@@ -276,7 +276,7 @@ jobs:
             }
 
       - name: Update release body
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.seed.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
@@ -291,3 +291,7 @@ jobs:
       - name: Already formatted (noop)
         if: steps.guard.outputs.skip == 'true'
         run: echo "Release body already contains channel-specific sentinel; skipping."
+
+- name: No release to format (noop)
+  if: steps.seed.outputs.skip == 'true'
+  run: echo "No release resolved (zero releases or upstream didn't publish); formatter exiting cleanly."

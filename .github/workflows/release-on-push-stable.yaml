@@ -5,6 +5,16 @@ on:
     branches: [ main ]
     paths-ignore:
       - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'spec/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.rubocop.yml'
+      - '.ruby-version'
+      - 'netlify.toml'
+      - 'README.adoc'
+      - 'release-please-config.json'
+      - 'release-please-config.prerelease.json'
 
 permissions:
   contents: write
