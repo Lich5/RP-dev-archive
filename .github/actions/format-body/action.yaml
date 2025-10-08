@@ -36,6 +36,10 @@ inputs:
     description: "pre | stable"
     required: true
     default: "pre"
+  pr_number:
+    description: "Explicit PR number (for workflow_run invocations)"
+    required: false
+    default: ""
   wait_seconds:
     description: "Max seconds to wait for Ellipsis block to appear"
     required: false
@@ -71,6 +75,7 @@ runs:
         WAIT_I: ${{ inputs.wait_interval_seconds }}
         CONTRACT_SHA: "95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb"
         BREAK_AUTO: ${{ inputs.break_autolinks_in_bullets }}
+        PR_NUMBER: ${{ inputs.pr_number }}
       with:
         script: |
           const MODE = process.env.MODE; // 'pre' or 'stable'
@@ -82,7 +87,12 @@ runs:
 
           const owner = context.repo.owner;
           const repo = context.repo.repo;
-          const prNumber = context.issue.number;
+          const explicit = (process.env.PR_NUMBER || "").trim();
+          const prNumber = explicit || (context.issue && context.issue.number);
+          if (!prNumber) {
+            core.setFailed("No PR context. Provide 'pr_number' when not running on pull_request.");
+            process.exit(1);
+          }
 
           const ELLIPSIS_MARK = '<!-- ELLIPSIS_HIDDEN -->';
 
@@ -254,10 +264,12 @@ runs:
         script: |
           const owner = context.repo.owner;
           const repo = context.repo.repo;
-          const pull_number = context.issue.number;
+          const pull_number = (process.env.PR_NUMBER || "").trim() || (context.issue && context.issue.number);
+          if (!pull_number) { core.setFailed("Missing PR number for PATCH."); process.exit(1); }
           const finalBody = process.env.finalBody;
           await github.rest.pulls.update({ owner, repo, pull_number, body: finalBody });
       env:
+        PR_NUMBER: ${{ inputs.pr_number }}
         finalBody: ${{ steps.compose.outputs.finalBody }}
 
     - name: Sentinel unchanged (skipped)
