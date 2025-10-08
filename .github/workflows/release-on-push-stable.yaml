@@ -58,6 +58,12 @@ jobs:
     steps:
       # 1) Release Please for stable branch
       - uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c # v4.3.0
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+          skip-github-pull-request: true
       - name: Trace RP outputs
         if: ${{ steps.rp.outputs.release_created != '' }}
         run: |
@@ -185,12 +191,6 @@ jobs:
           set -euo pipefail
           gh release edit "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
       # --- END FAST-PATH ---
-        id: rp
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          target-branch: ${{ github.ref_name }}
-          skip-github-pull-request: true
 
       # 2) Only build/upload when a new GitHub Release was created
       - name: Checkout repository
@@ -531,7 +531,6 @@ installer_gate:
           Write-Host "MSYS2-prune: after  = $afterMB MB (saved $savedMB MB)"
           Write-Host "::endgroup::"
 
-      
       # Pull the packaged Lich payload from the just-created Release
       - name: Download core Lich payload from the Release
         if: ${{ needs.release.outputs.release_created == 'true' }}
