@@ -314,8 +314,9 @@ jobs:
             ($_ -notmatch '^C:\\Strawberry(\\|$)')       # drop Strawberry toolchain
           }
           $san = @("$msys\ucrt64\bin","$msys\usr\bin") + $filtered
-          "PATH_VENDOR_MSYS={0}" -f ($san -join ';') | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-                "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $joined = ($san -join ';')
+          "PATH_VENDOR_MSYS=$joined" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "path=$joined" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
           "RI_DEVKIT=" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Initialize MSYS2 (minimal UCRT64; no meta toolchain)
