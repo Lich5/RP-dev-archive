@@ -240,34 +240,35 @@ jobs:
     if: ${{ needs.release.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     outputs:
-    installer: ${{ steps.gate.outputs.installer }}
+      installer: ${{ steps.gate.outputs.installer }}
     steps:
-    - name: Resolve installer gate (labels only, with tracing)
-      id: gate
-      shell: bash
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -euo pipefail
-        set -x
-        repo="${GITHUB_REPOSITORY}"
-        branch="main"
-        tag="${{ needs.release.outputs.tag_name }}"
-        want=true
-        gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
-        ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
-        pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
-        best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
-          def esc: gsub("([.^$|()\[\]{}*+?\\-])"; "\\$1");
-          .[] | select(.merged_at != null)
-          | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
-          | [.merged_at, .number] | @tsv' | sort -r | head -n1)"
-        pr="$(printf '%s' "$best" | awk '{print $2}')"
-        if [ -n "${pr:-}" ]; then
-          labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
-          if printf '%s\n' "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then want=false; fi
-        fi
-        echo "installer=$want" >> "$GITHUB_OUTPUT"
+      - name: Resolve installer gate (labels only, with tracing)
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -x
+          repo="${GITHUB_REPOSITORY}"
+          branch="main"
+          tag="${{ needs.release.outputs.tag_name }}"
+          want=true
+          gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
+          ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
+          pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
+          best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
+            def esc: gsub("([.^$|()\[\]{}*+?\-])"; "\\$1");
+            .[] | select(.merged_at != null)
+            | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
+            | [.merged_at, .number] | @tsv' | sort -r | head -n1)"
+          pr="$(printf '%s' "$best" | awk '{print $2}')"
+          if [ -n "${pr:-}" ]; then
+            labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
+            if printf '%s\n' "$labels" | grep -Eq '^(skip-installer|no-installer)$'; then want=false; fi
+          fi
+          echo "installer=$want" >> "$GITHUB_OUTPUT"
+
   build_installer:
     needs: [release, installer_gate]
     if: ${{ needs.release.outputs.release_created == 'true' && needs.installer_gate.outputs.installer == 'true' }}
