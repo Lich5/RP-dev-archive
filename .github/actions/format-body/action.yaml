@@ -134,8 +134,6 @@ runs:
           const dateStr = vnd.date;
           const headerLine = versionStr ? `Lich ${versionStr} (${dateStr})` : `Lich (${dateStr})`;
           // ---------------------------------------------------------
-// ---------------------------------------------------------
-
 
           // Ellipsis (verbatim)
           let ellipsis = '';
