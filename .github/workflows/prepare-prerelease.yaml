@@ -1,5 +1,5 @@
 # =============================================================================
-# Workflow: prepare-prerelease.yml
+# Workflow: prepare-prerelease.yaml
 # Purpose: Prepare a Release Please prerelease (PR only; no GitHub Release) on
 #          a prerelease train (pre/beta or pre/beta/<slug>).
 #

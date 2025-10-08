@@ -280,7 +280,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |          # Labels are read from the merged RP PR. Case-insensitive match on:
+        run: |          # Labels are read from the merged Release Please PR. Case-insensitive match on:
           #   'skip-installer' or 'no-installer' -> disables installer.
           # If no PR is found (rare, e.g., indexing lag), default to enabling installer.
 
@@ -405,7 +405,7 @@ jobs:
           choco install -y --limit-output msys2 --params '"/InstallDir:C:\Ruby4Lich5\msys64 /NoUpdate"'
 
       # Build sanitized PATH that prefers vendored MSYS2 (Option A) and cache it
-      # We prepend vendored MSYS2 so gcc/pkg-config resolve predictably.
+      # We prepend vendored MSYS2 so gcc/pkg-config resolves predictably.
       # This prevents mixing runner DevKit/Strawberry toolchains (reproducibility).
       - name: Build sanitized PATH for vendored MSYS2
         id: vendormsys
