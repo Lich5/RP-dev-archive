@@ -292,6 +292,6 @@ jobs:
         if: steps.guard.outputs.skip == 'true'
         run: echo "Release body already contains channel-specific sentinel; skipping."
 
-- name: No release to format (noop)
-  if: steps.seed.outputs.skip == 'true'
-  run: echo "No release resolved (zero releases or upstream didn't publish); formatter exiting cleanly."
+      - name: No release to format (noop)
+        if: steps.seed.outputs.skip == 'true'
+        run: echo "No release resolved (zero releases or upstream didn't publish); formatter exiting cleanly."
