@@ -5,6 +5,9 @@ on:
     types: [opened, labeled, synchronize, edited, reopened]
     branches:
       - "main"
+  workflow_run:
+    workflows: ["Prepare Stable Release"]
+    types: [completed]
   # Manual escape hatch
   # workflow_dispatch: {}
 
@@ -35,3 +38,36 @@ jobs:
           wait_seconds: 0
           wait_interval_seconds: 5
 
+
+  format_from_release_please_run:
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (read optional sections.md if present)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+
+      - name: Find open Release Please PR (stable)
+        id: find
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const all = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', sort: 'updated', direction: 'desc', per_page: 50
+            });
+            const match = all.find(pr =>
+              pr.user && (pr.user.login === 'release-please[bot]' || pr.user.login === 'github-actions[bot]') &&
+              pr.labels && pr.labels.some(l => l.name === 'autorelease: pending')
+            );
+            if (!match) core.setFailed('No open Release Please PR (stable) found.');
+            core.setOutput('number', String(match.number));
+
+      - name: Format body (stable via workflow_run)
+        uses: ./.github/actions/format-body
+        with:
+          mode: stable
+          wait_seconds: 0
+          wait_interval_seconds: 5
+          pr_number: ${{ steps.find.outputs.number }}
