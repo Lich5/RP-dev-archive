@@ -68,6 +68,7 @@ jobs:
       # Only proceed if releasable units exist since last stable tag.
       # Releasable units for this repo: feat|fix with scope (all|dr|gs).
       - name: "Guard: detect releasable units since last stable tag"
+        id: guard
         shell: bash
         run: |
           set -euo pipefail
@@ -81,11 +82,15 @@ jobs:
             rel="$(git log --pretty=%s | grep -E '^(feat|fix)\((all|dr|gs)\):' || true)"
           fi
           if [ -z "$rel" ]; then
+            echo "has_releasables=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No releasable units (feat/fix with scope all|dr|gs) since ${last:-repo start}; skipping Release Please."
             exit 0
+          else
+            echo "has_releasables=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Release Please (open/update Release PR)
+        if: ${{ steps.guard.outputs.has_releasables == 'true' }}
         # Pinned to SHA for supply-chain safety (release-please-action v4.3.0)
         uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c
         with:
