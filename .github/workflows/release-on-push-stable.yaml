@@ -574,7 +574,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # BEGIN TEMPORARY: Manual repair path for existing releases (easily removable)
   manual_repair_existing_release:
-    name: manual repair: format release body for existing tag
+    name: "manual repair: format release body for existing tag"
     if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
