@@ -551,16 +551,18 @@ jobs:
           unzip -q lich-5.zip
           # Archive contains Lich5/ (capital L) to match the .iss Source paths
 
-      # Build Windows installer with Inno Setup
+     # Build Windows installer with Inno Setup
       - name: Build Windows installer with Inno Setup
         shell: powershell
-        env:
-          PATH: ${{ steps.vendormsys.outputs.path }}
-          RI_DEVKIT: ''
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { Write-Error "ISCC.exe not found at $iscc"; exit 1 }
           & $iscc "R4LGTK3.iss"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Error "ISCC exited with code $code (likely missing SignTool or another PATH-dependent tool)."
+            exit $code
+          }
           if (!(Test-Path .\Output\Ruby4Lich5.exe)) { Write-Error "Expected Output\Ruby4Lich5.exe not found"; exit 1 }
           Move-Item -Path .\Output\Ruby4Lich5.exe -Destination .\Ruby4Lich5.exe -Force
 
