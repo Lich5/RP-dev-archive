@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.13.0-beta.1](https://github.com/Lich5/ng-betalich/compare/v5.13.0-beta.0...v5.13.0-beta.1) (2025-10-09)
+
+
+### Features
+
+* **all:** DB Maintenance PR from EO for testing ([#29](https://github.com/Lich5/ng-betalich/issues/29)) ([1cf1be2](https://github.com/Lich5/ng-betalich/commit/1cf1be2124b7643113b4f51f378fb6feed02ac24))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.13.0-beta.1 ([c5a58bf](https://github.com/Lich5/ng-betalich/commit/c5a58bfbe56886c7524f99776e7207495842f8ee))
+
 ## [5.13.0-beta.0](https://github.com/Lich5/ng-betalich/compare/v5.12.10...v5.13.0-beta.0) (2025-10-09)
 
 
