@@ -189,7 +189,7 @@ jobs:
           FINAL: ${{ steps.transform_body.outputs.final }}
         run: |
           set -euo pipefail
-          gh release edit "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --title "Lich v$VERSION" --notes-file <(printf '%s' "$FINAL")
       # --- END FAST-PATH ---
 
       # 2) Only build/upload when a new GitHub Release was created
