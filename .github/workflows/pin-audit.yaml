@@ -20,6 +20,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Ensure temporary file is removed even on error/exit
+          trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' EXIT
           echo "Scanning .github/workflows and .github/actions for 'uses:' refs..."
           # Collect YAML/action files
           tmpfile="$(mktemp)"
