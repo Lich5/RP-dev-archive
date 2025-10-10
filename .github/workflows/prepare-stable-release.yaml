@@ -111,6 +111,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # identity required for annotated tags & branch refs
+          git config --local user.name  "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           ts="$(date -u +%Y%m%d-%H%M%S)"
           tag="checkpoint/stable/$ts"
           backup="backup/stable/$ts"
