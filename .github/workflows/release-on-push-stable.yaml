@@ -384,6 +384,7 @@ jobs:
           }
 
           # Output the library versions installed for troubleshooting
+          Write-Host "MSYS Library versions installed:"
           & $pac -Q
 
           # Pin tool choices for downstream (regardless of PATH order)
@@ -443,6 +444,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
 
           # Print out installed gems for troubleshooting
+          Write-Host "Gems installed:"
           gem list
 
       # (Optional) Remove Python to keep the bundle lean. Mode is driven by EXP_PRUNE_PYTHON_MODE:
