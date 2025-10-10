@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.13.0-beta.0](https://github.com/Lich5/ng-betalich/compare/v5.12.10...v5.13.0-beta.0) (2025-10-10)
+
+
+### Features
+
+* **all:** YAML Login from EO PR 996 for testing ([#2](https://github.com/Lich5/ng-betalich/issues/2)) ([e882e08](https://github.com/Lich5/ng-betalich/commit/e882e080990de064f83760522d6137435a358ee0))
+* **dr:** Meta trashcan PR from EO for testing ([#8](https://github.com/Lich5/ng-betalich/issues/8)) ([1d784b7](https://github.com/Lich5/ng-betalich/commit/1d784b730c076b51922537f30009a1fb86e57c50))
+* **gs:** Armaments PR from EO for testing ([#3](https://github.com/Lich5/ng-betalich/issues/3)) ([77e664c](https://github.com/Lich5/ng-betalich/commit/77e664c737e3b735e7693f5b48d46ea76f3c04bc))
+
+
+### Miscellaneous Chores
+
+* seed prerelease 5.13.0-beta.0 ([e8c6417](https://github.com/Lich5/ng-betalich/commit/e8c6417178e441278a317c437f87075c91a555ba))
+
 ## [5.12.10](https://github.com/Lich5/ng-betalich/compare/v5.12.9...v5.12.10) (2025-10-08)
 
 
