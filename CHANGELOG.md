@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.12.12](https://github.com/Lich5/ng-betalich/compare/v5.12.11...v5.12.12) (2025-10-10)
+
+
+### Bug Fixes
+
+* **dr:** Meta trashcan PR from EO for testing ([#8](https://github.com/Lich5/ng-betalich/issues/8)) ([01bbf28](https://github.com/Lich5/ng-betalich/commit/01bbf28e628fb6773f86538b47da9545f4265044))
+
 ## [5.12.11](https://github.com/Lich5/ng-betalich/compare/v5.12.10...v5.12.11) (2025-10-10)
 
 
