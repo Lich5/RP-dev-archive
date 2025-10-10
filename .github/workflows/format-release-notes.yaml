@@ -135,8 +135,9 @@ jobs:
             async function listClosed(opts) {
               return github.rest.pulls.list({ owner, repo, state: 'closed', per_page: 100, ...opts }).then(r => r.data || []);
             }
-
+            const head = `${owner}:release-please--branches--${base}`;
             let pulls = await listClosed({ base, head });
+            if (!pulls || !pulls.length) { pulls = await listClosed({ base }); 
             let hit = (pulls || []).find(pr =>
               pr.merged_at &&
               titleRe.test(pr.title || '')
