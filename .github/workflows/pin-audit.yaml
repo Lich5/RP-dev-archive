@@ -75,7 +75,7 @@ jobs:
               latest_tag[$repo]="(no-tags)"
               latest_sha[$repo]=""  # unknown; caller will treat mismatch as "new"
             else
-              latest="${tags_sorted[-1]}"
+              latest="${tags_sorted[${#tags_sorted[@]}-1]}"
               latest_tag[$repo]="$latest"
               latest_sha[$repo]="${tag_commit[$latest]}"
             fi
