@@ -1,3 +1,8 @@
+# Audit: Verify action pins & currency
+# Purpose: List non-SHA `uses:` refs and flag SHA pins as current/new vs the latest semver tag.
+# Trigger: workflow_dispatch (manual). Read-only.
+# Cache: Within a run, tag lookups are cached per action repo.
+# Rollback: Non-invasive; revert by removing this file.
 name: Pin Audit (actions uses)
 on:
   workflow_dispatch:
@@ -13,8 +18,10 @@ jobs:
     name: Scan workflow uses for pins and currency
     runs-on: ubuntu-latest
     steps:
+      # Steps: checkout (read-only) + scanner (summary output)
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v6.0.0
+
       - name: Scan refs & check currency
         id: scan
         shell: bash
@@ -22,8 +29,8 @@ jobs:
           set -euo pipefail
           # Ensure temporary file is removed even on error/exit
           trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' EXIT
+
           echo "Scanning .github/workflows and .github/actions for 'uses:' refs..."
-          # Collect YAML/action files
           tmpfile="$(mktemp)"
           find .github/workflows .github/actions -type f \
             \( -iname '*.yml' -o -iname '*.yaml' -o -iname 'action.yml' -o -iname 'action.yaml' \) \
@@ -33,80 +40,99 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           non_sha=0
-          echo "#### Pinned SHA refs (currency check)" >> "$GITHUB_STEP_SUMMARY"
           declare -A latest_tag latest_sha
+
+          echo "#### Pinned SHA refs (currency check)" >> "$GITHUB_STEP_SUMMARY"
           while IFS= read -r f; do
-            # Find all uses: lines in the file
-            while IFS= read -r line; do
-              uses="$(echo "$line" | sed -E 's/^\s*uses:\s*//')"
-              # ignore docker://
-              [[ "$uses" == docker://* ]] && continue
-              # ignore local actions (./ or .github/)
-              [[ "$uses" == ./* || "$uses" == .github/* ]] && continue
+            while IFS= read -r ln; do
+              lineno="${ln%%:*}"
+              line="${ln#*:}"
+
+              # Parse 'uses:' value via bash regex; strip trailing inline comment
+              uses=""
+              if [[ "$line" =~ ^[[:space:]]*uses:[[:space:]]*(.*)$ ]]; then
+                uses="${BASH_REMATCH[1]}"
+              else
+                continue
+              fi
+              if [[ "$uses" =~ ^([^#]+) ]]; then
+                uses="${BASH_REMATCH[1]}"
+              fi
+
+              # Trim leading/trailing whitespace
+              uses="${uses#"${uses%%[![:space:]]*}"}"
+              uses="${uses%"${uses##*[![:space:]]}"}"
+
+              # Ignore docker:// and local calls
+              [[ "$uses" == docker://* || "$uses" == ./* || "$uses" == .github/* ]] && continue
 
               owner_repo="${uses%@*}"
               ref="${uses##*@}"
+              [[ "$owner_repo" == "$uses" ]] && continue  # no '@' found
 
-              # If no '@' present (malformed), skip
-              [[ "$owner_repo" == "$uses" ]] && continue
-
-              # If not a SHA (40-hex), count as non-SHA (to be listed later) and skip currency check
-              if [[ ! "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
-                ((non_sha++)) || true
-                continue
-              fi
-
-              # For SHA pins: determine latest semver tag in the action repo and compare
-              repo_url="https://github.com/${owner_repo}.git"
-              if [[ -z "${latest_tag[$owner_repo]:-}" ]]; then
-                # Fetch tags; prefer dereferenced '^{}' commit lines for annotated tags
-                mapfile -t tag_lines < <(git ls-remote --tags "$repo_url" 2>/dev/null | sed 's/\t/ /g')
-                # Build tag->commit map (prefer '^{}' lines)
-                declare -A tag_commit
-                for ln in "${tag_lines[@]}"; do
-                  sha="${ln%% *}"; refname="${ln##* }"
-                  [[ "$refname" != refs/tags/* ]] && continue
-                  tag="${refname#refs/tags/}"
-                  if [[ "$tag" =~ \^\{\}$ ]]; then
-                    base="${tag%^{}}"
-                    tag_commit["$base"]="$sha"
-                  elif [[ -z "${tag_commit[$tag]:-}" ]]; then
-                    tag_commit["$tag"]="$sha"
+              # Only treat full 40-hex as a pinned SHA
+              if [[ "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
+                if [[ -z "${latest_tag[$owner_repo]:-}" ]]; then
+                  # Fetch tags once per repo; prefer '^{}' deref for annotated tags
+                  mapfile -t tag_lines < <(git ls-remote --tags "https://github.com/${owner_repo}.git" 2>/dev/null) || tag_lines=()
+                  declare -A tag_commit=()
+                  for l2 in "${tag_lines[@]}"; do
+                    sha="${l2%%	*}"; refname="${l2##*	}"
+                    [[ "$refname" != refs/tags/* ]] && continue
+                    tag="${refname#refs/tags/}"
+                    if [[ "$tag" =~ \^\{\}$ ]]; then
+                      base="${tag%^{}}"
+                      tag_commit["$base"]="$sha"
+                    elif [[ -z "${tag_commit[$tag]:-}" ]]; then
+                      tag_commit["$tag"]="$sha"
+                    fi
+                  done
+                  mapfile -t tags_sorted < <(printf '%s\n' "${!tag_commit[@]}" | grep -E '^v[0-9]+(\.[0-9]+){0,2}$' | sort -V) || tags_sorted=()
+                  if [[ "${#tags_sorted[@]}" -eq 0 ]]; then
+                    latest_tag[$owner_repo]="(no-tags)"
+                    latest_sha[$owner_repo]="$ref"
+                  else
+                    latest="${tags_sorted[-1]}"
+                    latest_tag[$owner_repo]="$latest"
+                    latest_sha[$owner_repo]="${tag_commit[$latest]}"
                   fi
-                done
-                # Choose latest semver-like tag (vN or vN.N or vN.N.N), prefer those with dots
-                mapfile -t tags_sorted < <(printf '%s\n' "${!tag_commit[@]}" | grep -E '^v[0-9]+(\.[0-9]+){0,2}$' | sort -V)
-                if [[ "${#tags_sorted[@]}" -eq 0 ]]; then
-                  latest_tag[$owner_repo]="(no-tags)"
-                  latest_sha[$owner_repo]="$ref"
-                else
-                  latest="${tags_sorted[-1]}"
-                  latest_tag[$owner_repo]="$latest"
-                  latest_sha[$owner_repo]="${tag_commit[$latest]}"
                 fi
-              fi
-
-              # Compare our pin to the latest tag commit
-              if [[ "$ref" == "${latest_sha[$owner_repo]}" ]]; then
-                printf '• %s: %s — current at %s\n' "$f" "$uses" "${latest_tag[$owner_repo]}" >> "$GITHUB_STEP_SUMMARY"
+                if [[ "$ref" == "${latest_sha[$owner_repo]}" ]]; then
+                  printf '• %s:%s uses: %s — current at %s\n' "$f" "$lineno" "$uses" "${latest_tag[$owner_repo]}" >> "$GITHUB_STEP_SUMMARY"
+                else
+                  printf '• %s:%s uses: %s — new at %s\n' "$f" "$lineno" "$uses" "${latest_tag[$owner_repo]}" >> "$GITHUB_STEP_SUMMARY"
+                fi
               else
-                printf '• %s: %s — new at %s\n' "$f" "$uses" "${latest_tag[$owner_repo]}" >> "$GITHUB_STEP_SUMMARY"
+                ((non_sha++)) || true
               fi
-            done < <(grep -RnohE '^\s*uses:\s*[^#]+' "$f" || true)
+            done < <(grep -nE '^[[:space:]]*uses:[[:space:]]*[^#]+' "$f" || true)
           done < "$tmpfile"
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "#### Non-SHA refs (excluding local and docker)" >> "$GITHUB_STEP_SUMMARY"
           while IFS= read -r f; do
-            while IFS= read -r line; do
-              uses="$(echo "$line" | sed -E 's/^\s*uses:\s*//')"
-              # ignore docker:// and local
+            while IFS= read -r ln; do
+              lineno="${ln%%:*}"
+              line="${ln#*:}"
+
+              uses=""
+              if [[ "$line" =~ ^[[:space:]]*uses:[[:space:]]*(.*)$ ]]; then
+                uses="${BASH_REMATCH[1]}"
+              else
+                continue
+              fi
+              if [[ "$uses" =~ ^([^#]+) ]]; then
+                uses="${BASH_REMATCH[1]}"
+              fi
+              uses="${uses#"${uses%%[![:space:]]*}"}"
+              uses="${uses%"${uses##*[![:space:]]}"}"
+
               [[ "$uses" == docker://* || "$uses" == ./* || "$uses" == .github/* ]] && continue
               ref="${uses##*@}"
               if [[ ! "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
-                printf '• %s: %s\n' "$f" "$uses" >> "$GITHUB_STEP_SUMMARY"
+                printf '• %s:%s uses: %s\n' "$f" "$lineno" "$uses" >> "$GITHUB_STEP_SUMMARY"
               fi
-            done < <(grep -RnohE '^\s*uses:\s*[^#]+' "$f" || true)
+            done < <(grep -nE '^[[:space:]]*uses:[[:space:]]*[^#]+' "$f" || true)
           done < "$tmpfile"
 
           echo "non_sha_count=$non_sha" >> "$GITHUB_OUTPUT"
