@@ -14,6 +14,18 @@ on:
   # this may be problematic and requires rigorous testing
   # push:
   #   branches: [ "main" ]
+#   paths-ignore:
+#     - '**/*.md'
+#     - 'docs/**'
+#     - '.github/ISSUE_TEMPLATE/**'
+#     - '.github/**/README*'
+#     - 'spec/**'
+#     - 'scripts/dev/**'
+#     - '**/*.png'
+#     - '**/*.jpg'
+#     - '**/*.gif'
+#     - 'CODEOWNERS'
+#     - 'LICENSE*'
 
 permissions:
   contents: write
@@ -61,7 +73,10 @@ jobs:
           set -euo pipefail
           repo="${{ github.repository }}"
           lbl="rp-selftest-${{ github.run_id }}"
-          gh api -X POST "/repos/$repo/labels"             -f name="$lbl" -f color=ededed -f description="release-please token self-test"
+          gh api -X POST "repos/$repo/labels" \
+            -f name="$lbl" -f color='ededed' -f description='release-please token self-test' >/dev/null 2>&1 || \
+          gh api -X PATCH "repos/$repo/labels/$lbl" \
+            -f new_name="$lbl" -f color='ededed' -f description='release-please token self-test' >/dev/null
           gh api -X DELETE "/repos/$repo/labels/$lbl"
 
       # Only proceed if releasable units exist since last stable tag.
@@ -88,6 +103,36 @@ jobs:
             echo "has_releasables=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: "Checkpoint: tag + rotating backup/stable/*"
+        id: checkpoint
+        if: ${{ steps.guard.outputs.has_releasables == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ts="$(date -u +%Y%m%d-%H%M%S)"
+          tag="checkpoint/stable/$ts"
+          backup="backup/stable/$ts"
+
+          git tag -a "$tag" -m "Checkpoint before prepare-stable (run ${{ github.run_id }})"
+          git push origin "$tag"
+
+          # prune previous backup/stable/* branches (safe scope)
+          repo="${{ github.repository }}"
+          gh api "/repos/$repo/git/refs/heads" --jq '.[] | .ref'       | awk -F'refs/heads/' '/^refs\/heads\/backup\/stable\//{print $2}'       | while read -r b; do
+                gh api -X DELETE "/repos/$repo/git/refs/heads/$b" || true
+              done
+
+          # create new backup branch from current HEAD
+          git branch -f "$backup"
+          git push -u origin "$backup"
+
+          {
+            echo "tag=$tag"
+            echo "backup=$backup"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Release Please (open/update Release PR)
         if: ${{ steps.guard.outputs.has_releasables == 'true' }}
         # Pinned to SHA for supply-chain safety (release-please-action v4.3.0)
@@ -101,3 +146,31 @@ jobs:
       #  - format-pr-body-stable.yml  (PR body)
       #  - release-on-push-stable.yml + format-release-notes.yml (Release body)
       # This workflow intentionally does not format bodies.
+      - name: "Run summary (prepare-stable)"
+        if: always()
+        env:
+          EVENT: ${{ github.event_name }}
+          TARGET: ${{ inputs.target_branch }}
+          HAS_REL: ${{ steps.guard.outputs.has_releasables }}
+          CK_TAG: ${{ steps.checkpoint.outputs.tag }}
+          CK_BACKUP: ${{ steps.checkpoint.outputs.backup }}
+        shell: bash
+        run: |
+          {
+            echo "## Prepare Stable — Run Summary"
+            echo ""
+            echo "- Event: **$EVENT**"
+            echo "- Target branch: **${TARGET:-unknown}**"
+            if [ "${HAS_REL:-false}" = "true" ]; then
+              echo "- Releasables: **yes**"
+            else
+              echo "- Releasables: **no** (Release Please step skipped)"
+            fi
+            if [ -n "${CK_TAG:-}" ] || [ -n "${CK_BACKUP:-}" ]; then
+              echo "- Checkpoint: tag=\`$CK_TAG\`, backup branch=\`$CK_BACKUP\`"
+            fi
+            echo ""
+            echo "> **Revert guidance (stable):** If you must revert after a stable release,"
+            echo "> open a PR with a Conventional Commit title like:"
+            echo "> \`fix(<scope>): revert '<original subject>' (#<PR>)\` to guarantee a patch bump."
+          } >> "$GITHUB_STEP_SUMMARY"
