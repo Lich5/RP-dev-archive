@@ -1,5 +1,9 @@
 name: format-release-notes
 
+concurrency:
+  group: format-release-notes-${{ github.event.release.tag_name || github.run_id }}
+  cancel-in-progress: true
+
 on:
   # Fires on publish/edit of a release in the UI (not suppressed), for prerelease and stable.
   release:
@@ -19,10 +23,6 @@ on:
         description: "Release tag to format (e.g., v5.13.0-beta.0). Optional; without it we use latest stable."
         required: false
         type: string
-
-concurrency:
-  group: format-release-${{ github.run_id }}
-  cancel-in-progress: false
 
 jobs:
   format:
