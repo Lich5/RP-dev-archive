@@ -382,7 +382,11 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Note: mingw-w64-ucrt-x86_64-python present after init (expected via GTK deps); will remove later."
           }
-      
+
+          # Output the library versions installed for troubleshooting
+          Write-Host "MSYS Library versions installed:"
+          & $pac -Q
+
           # Pin tool choices for downstream (regardless of PATH order)
           "CC=$gcc"                  | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "PKG_CONFIG=$pkgc"         | Out-File $env:GITHUB_ENV -Append -Encoding utf8
@@ -438,6 +442,10 @@ jobs:
           #  Use the Stop Parsing Operator ( --% ) for PowerShell to avoid interpolation in the string above
           & $rubyExe -e --% $rb
           if ($LASTEXITCODE -ne 0) { Write-Error "Ruby GTK3/sqlite3 load failed"; exit 1 }
+
+          # Print out installed gems for troubleshooting
+          Write-Host "Gems installed:"
+          gem list
 
       # (Optional) Remove Python to keep the bundle lean. Mode is driven by EXP_PRUNE_PYTHON_MODE:
       #   - 'files'  : delete python binaries/trees by glob (default)
