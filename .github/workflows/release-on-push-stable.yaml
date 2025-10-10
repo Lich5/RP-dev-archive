@@ -104,15 +104,19 @@ jobs:
             const repo  = context.repo.repo;
             const rawVersion = process.env.VERSION || '';
             const base = process.env.BASE || 'main';
-            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            const head = `${owner}:release-please--branches--${base}`;const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const v = esc(rawVersion);
             const titleRe = new RegExp(`\\b(?:release|Lich)\\s+v?${v}\\b`, 'i');
             async function listClosed(opts) {
               const r = await github.rest.pulls.list({ owner, repo, per_page: 100, sort: 'updated', direction: 'desc', ...opts });
               return r.data || [];
             }
-            let pulls = await listClosed({ base });
-            let hit = (pulls || []).find(pr => pr.merged_at && titleRe.test(pr.title || ''));
+            let pulls = await listClosed({ base, head });
+            let hit = (pulls || [])
+              .filter(pr => pr.merged_at && titleRe.test(pr.title || ''))
+              .sort((a, b) => new Date(a.merged_at) - new Date(b.merged_at))
+              .pop();
             if (!hit) {
               const q = `repo:${owner}/${repo} is:pr is:merged in:title "v${rawVersion}" base:${base}`;
               try {
@@ -259,7 +263,7 @@ jobs:
           want=true
           gh_api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
           ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
-          pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&sort=updated&direction=desc&per_page=100")" || pulls_json="[]"
+          pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&base=$branch&head=${repo%%/*}:release-please--branches--$branch&per_page=100")" || pulls_json="[]"
           best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
             def esc: gsub("([.^$|()\[\]{}*+?\-])"; "\\$1");
             .[] | select(.merged_at != null)
