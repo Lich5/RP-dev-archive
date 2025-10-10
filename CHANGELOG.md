@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.12.13](https://github.com/Lich5/ng-betalich/compare/v5.12.12...v5.12.13) (2025-10-10)
+
+
+### Bug Fixes
+
+* **all:** Refocus frontend PR from EO for testing ([#9](https://github.com/Lich5/ng-betalich/issues/9)) ([a02eeef](https://github.com/Lich5/ng-betalich/commit/a02eeef0d5a420fff19a6f09729fef43454bf412))
+
 ## [5.12.12](https://github.com/Lich5/ng-betalich/compare/v5.12.11...v5.12.12) (2025-10-10)
 
 
