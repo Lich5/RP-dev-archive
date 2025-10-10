@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.13.0-beta.1](https://github.com/Lich5/ng-betalich/compare/v5.13.0-beta.0...v5.13.0-beta.1) (2025-10-10)
+
+
+### Features
+
+* **all:** Refocus frontend PR from EO for testing ([#9](https://github.com/Lich5/ng-betalich/issues/9)) ([17a4bfd](https://github.com/Lich5/ng-betalich/commit/17a4bfd20aabb5c73feb392a50bed6df4fa8f96c))
+
+
+### Miscellaneous Chores
+
+* pin prerelease v5.13.0-beta.1 ([175794c](https://github.com/Lich5/ng-betalich/commit/175794cfdbeb1edf79a83b74e108783415853359))
+
 ## [5.13.0-beta.0](https://github.com/Lich5/ng-betalich/compare/v5.12.10...v5.13.0-beta.0) (2025-10-10)
 
 
