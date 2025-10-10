@@ -265,10 +265,13 @@ jobs:
           ver="$(printf '%s' "$tag" | sed -nE 's/.*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?).*/\1/p')"
           pulls_json="$(gh_api "/repos/$repo/pulls?state=closed&base=$branch&head=${repo%%/*}:release-please--branches--$branch&per_page=100")" || pulls_json="[]"
           best="$(printf '%s' "$pulls_json" | jq -r --arg v "$ver" '
-            def esc: gsub("([.^$|()\[\]{}*+?\-])"; "\\$1");
-            .[] | select(.merged_at != null)
+            # Escape regex metacharacters in the version string
+            def esc: gsub("([.^$|()\\[\\]{}*+?\\-])"; "\\\\1");
+            .[]
+            | select(.merged_at != null)
             | select(.title | test( ("(^|[^0-9A-Za-z])" + "v?" + ($v|esc) + "([^0-9A-Za-z]|$)"); "i"))
-            | [.merged_at, .number] | @tsv' | sort -r | head -n1)"
+            | [ .merged_at, .number ] | @tsv
+          ' | sort -r | head -n1)"
           pr="$(printf '%s' "$best" | awk '{print $2}')"
           if [ -n "${pr:-}" ]; then
             labels="$(gh_api "/repos/$repo/issues/$pr/labels" | jq -r '.[].name | ascii_downcase')"
