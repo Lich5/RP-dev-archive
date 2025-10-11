@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.14.0](https://github.com/Lich5/ng-betalich/compare/v5.13.0...v5.14.0) (2025-10-11)
+
+
+### Features
+
+* **gs:** Creature combat PR from EO for testing ([#6](https://github.com/Lich5/ng-betalich/issues/6)) ([e3b63d1](https://github.com/Lich5/ng-betalich/commit/e3b63d1e24de165648255c34d9d90bd622ab3c59))
+* **gs:** Creature module PR from EO for testing ([#7](https://github.com/Lich5/ng-betalich/issues/7)) ([5fc3656](https://github.com/Lich5/ng-betalich/commit/5fc3656d10063ad9370cdfaa888a0497eea3fb23))
+
 ## [5.13.0](https://github.com/Lich5/ng-betalich/compare/v5.12.13...v5.13.0) (2025-10-11)
 
 
