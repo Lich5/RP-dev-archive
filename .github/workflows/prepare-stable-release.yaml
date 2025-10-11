@@ -70,7 +70,7 @@ jobs:
           subject="$(git show -s --format=%s "$GITHUB_SHA")"
           if [[ "$subject" =~ ^chore\(main\):[[:space:]]release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping: release commit detected: '${msg%%$'\n'*}'"
+            echo "::notice::Skipping: release commit detected: '${subject}'"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
