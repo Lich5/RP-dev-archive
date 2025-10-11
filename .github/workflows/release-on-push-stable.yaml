@@ -282,17 +282,6 @@ jobs:
             if [ -n "$candidates" ]; then
               best="$(for n in $candidates; do
                         gh_api "/repos/$repo/pulls/$n" --jq '[.merged_at,.number] | @tsv' 2>/dev/null || true
-
-  trace_build_condition:
-    needs: [release, installer_gate]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Trace needs for installer job
-        run: |
-          echo "release_created=${{ needs.release.outputs.release_created }}"
-          echo "installer=${{ needs.installer_gate.outputs.installer }}"
-
                       done | sort -r | head -n1)"
               pr="$(printf '%s' "$best" | awk '{print $2}')"
             fi
@@ -307,6 +296,16 @@ jobs:
 
     outputs:
       installer: ${{ steps.gate.outputs.installer }}
+
+  trace_build_condition:
+    needs: [release, installer_gate]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Trace needs for installer job
+        run: |
+          echo "release_created=${{ needs.release.outputs.release_created }}"
+          echo "installer=${{ needs.installer_gate.outputs.installer }}"
 
   build_installer:
     needs: [release, installer_gate]
