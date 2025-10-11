@@ -54,25 +54,27 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name || 'main' }}
+          fetch-depth: 0
+
+
       - name: "Classify: skip if this is the release commit"
         id: classify
         if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
           set -euo pipefail
-          msg="${{ github.event.head_commit.message }}"
-          if [[ "$msg" =~ ^chore\([^)]+\):[[:space:]]release ]]; then
+          subject="$(git show -s --format=%s "$GITHUB_SHA")"
+          if [[ "$subject" =~ ^chore\(main\):[[:space:]]release[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Skipping: release commit detected: '${msg%%$'\n'*}'"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          ref: ${{ inputs.target_branch || github.ref_name || 'main' }}
-          fetch-depth: 0
 
       - name: Git LF config (stabilize EOL)
         run: |
@@ -153,7 +155,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Release Please (open/update Release PR)
-        if: ${{ steps.guard.outputs.has_releasables == 'true' }}
+        if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
         # Pinned to SHA for supply-chain safety (release-please-action v4.3.0)
         uses: googleapis/release-please-action@c2a5a2bd6a758a0937f1ddb1e8950609867ed15c
         with:
@@ -165,13 +167,6 @@ jobs:
       #  - format-pr-body-stable.yml  (PR body)
       #  - release-on-push-stable.yml + format-release-notes.yml (Release body)
       # This workflow intentionally does not format bodies.
-
-      - name: "Run summary: no-op (nothing to do)"
-        if: ${{ steps.classify.outputs.skip == 'true' || steps.guard.outputs.has_releasables != 'true' }}
-        shell: bash
-        run: |
-          echo "::notice::No releasable units on this push; workflow exiting cleanly."
-
       - name: "Run summary (prepare-stable)"
         if: always()
         env:
