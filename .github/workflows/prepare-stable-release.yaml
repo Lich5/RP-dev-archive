@@ -43,7 +43,7 @@ jobs:
       - name: "Guard: require main as target"
         shell: bash
         env:
-          RAW_TARGET: ${{ inputs.target_branch }}
+          RAW_TARGET: ${{ inputs.target_branch || github.ref_name || 'main' }}
         run: |
           set -euo pipefail
           tgt="${RAW_TARGET:-}"
@@ -57,7 +57,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ inputs.target_branch || github.ref_name || 'main' }}
           fetch-depth: 0
 
       - name: Git LF config (stabilize EOL)
@@ -145,7 +145,7 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          target-branch: ${{ inputs.target_branch }}
+          target-branch: ${{ inputs.target_branch || github.ref_name || 'main' }}
 
       # PR body and Release body formatting are handled by:
       #  - format-pr-body-stable.yml  (PR body)
@@ -155,7 +155,7 @@ jobs:
         if: always()
         env:
           EVENT: ${{ github.event_name }}
-          TARGET: ${{ inputs.target_branch }}
+          TARGET: ${{ inputs.target_branch || github.ref_name || 'main' }}
           HAS_REL: ${{ steps.guard.outputs.has_releasables }}
           CK_TAG: ${{ steps.checkpoint.outputs.tag }}
           CK_BACKUP: ${{ steps.checkpoint.outputs.backup }}
